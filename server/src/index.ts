@@ -15,6 +15,10 @@ app.use(express.json());
 app.use('/api/media', mediaRouter);
 app.use('/api/playlists', playlistRouter);
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../../client/dist')));
   app.get('*', (req, res) => {

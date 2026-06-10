@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: teledrive
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+    disk:
+      name: teledrive-data
+      mountPath: /app/data
+      sizeGB: 1
+    healthCheckPath: /api/health
