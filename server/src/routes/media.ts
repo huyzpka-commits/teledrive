@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db';
-import { getFileUrl } from '../services/telegram';
+import { streamMedia } from '../services/telegram';
 
 const router = Router();
 
@@ -43,11 +43,13 @@ router.get('/:id/stream', async (req, res) => {
   try {
     const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id) as Record<string, any> | undefined;
     if (!row) return res.status(404).json({ error: 'Media not found' });
+    if (!row.chat_id || !row.telegram_message_id) {
+      return res.status(400).json({ error: 'Media not available for streaming (missing MTProto reference)' });
+    }
 
-    const url = await getFileUrl(row.telegram_file_id);
-    res.redirect(url);
+    await streamMedia(res, row.chat_id, row.telegram_message_id);
   } catch (e) {
-    res.status(500).json({ error: 'Failed to generate stream URL', detail: (e as Error).message });
+    res.status(500).json({ error: 'Failed to stream media', detail: (e as Error).message });
   }
 });
 

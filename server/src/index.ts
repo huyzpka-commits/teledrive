@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import mediaRouter from './routes/media';
 import playlistRouter from './routes/playlists';
-import { startTelegramBot } from './services/telegram';
+import { startTelegramClient } from './services/telegram';
 
 dotenv.config();
 
@@ -30,5 +30,5 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
-  startTelegramBot();
+  startTelegramClient();
 });

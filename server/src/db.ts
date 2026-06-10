@@ -14,7 +14,7 @@ db.pragma('journal_mode = WAL');
 db.exec(`
   CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_file_id TEXT NOT NULL,
+    telegram_file_id TEXT,
     file_unique_id TEXT,
     file_name TEXT,
     title TEXT,
@@ -26,6 +26,7 @@ db.exec(`
     thumbnail TEXT,
     telegram_message_id INTEGER,
     category TEXT,
+    chat_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -47,5 +48,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_media_type ON media(type);
   CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at);
 `);
+
+// Migration: add chat_id if missing (from older versions)
+try {
+  db.exec(`ALTER TABLE media ADD COLUMN chat_id TEXT;`);
+} catch (e) {
+  // Column likely already exists
+}
 
 export default db;

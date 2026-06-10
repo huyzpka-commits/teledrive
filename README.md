@@ -4,7 +4,7 @@ A free, self-hosted media streaming platform powered by **Telegram Cloud**. Stre
 
 ![Tech Stack](https://img.shields.io/badge/React-18-blue?logo=react)
 ![Tech Stack](https://img.shields.io/badge/Node.js-20-green?logo=node.js)
-![Tech Stack](https://img.shields.io/badge/Telegram-Bot%20API-blue?logo=telegram)
+![Tech Stack](https://img.shields.io/badge/Telegram-MTProto-blue?logo=telegram)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 ---
@@ -13,12 +13,13 @@ A free, self-hosted media streaming platform powered by **Telegram Cloud**. Stre
 
 - **Stream Audio & Video** directly from Telegram Cloud (no storage cost)
 - **Image Gallery** — browse and view photos in full quality
-- **Original Quality** — bot prompts to upload as `Document` (avoids Telegram compression)
+- **Original Quality** — files uploaded as documents (no Telegram compression)
 - **Dark Mode UI** — Netflix/Spotify inspired interface with Tailwind CSS
 - **Search & Filter** — find media by name, artist, or type instantly
 - **Playlist Management** — create and manage custom playlists
 - **Responsive Design** — works on desktop, tablet, and mobile
-- **Auto-index** — bot auto-detects file type by extension and MIME type
+- **Auto-index** — detects file type by extension and MIME type automatically
+- **MTProto Mobile Simulation** — disguises as a Samsung Galaxy S21 Ultra (Android 14) to avoid detection
 - **Free Hosting** — deploy to Render.com completely free
 
 ---
@@ -30,7 +31,8 @@ A free, self-hosted media streaming platform powered by **Telegram Cloud**. Stre
 | **Frontend** | React 18 + Vite + TypeScript + Tailwind CSS |
 | **Backend** | Node.js + Express + TypeScript |
 | **Database** | SQLite (better-sqlite3) with WAL mode |
-| **Storage** | Telegram Cloud via Bot API (unlimited free storage) |
+| **Telegram Protocol** | MTProto Client API (GramJS) — simulates mobile device |
+| **Storage** | Telegram Cloud (unlimited free storage) |
 | **Deployment** | Docker + Render.com (free tier) |
 
 ---
@@ -45,17 +47,30 @@ teledrive/
 │   │   ├── pages/         # Home, Library, MediaPlayer
 │   │   └── api.ts         # Axios API client
 │   └── package.json
-├── server/          # Express API + Telegram Bot
+├── server/          # Express API + MTProto Telegram Client
 │   ├── src/
 │   │   ├── db.ts          # SQLite schema & connection
 │   │   ├── routes/        # media.ts, playlists.ts
-│   │   ├── services/      # telegram.ts (bot logic)
+│   │   ├── services/      # telegram.ts (MTProto client logic)
+│   │   ├── scripts/       # generateSession.ts (one-time login)
 │   │   └── index.ts       # Express server entry
 │   └── package.json
 ├── Dockerfile       # Multi-stage Docker build
 ├── render.yaml      # Render.com deploy blueprint
 └── package.json     # Root monorepo workspace config
 ```
+
+---
+
+## Why MTProto instead of Bot API?
+
+| Feature | Bot API | MTProto (This Project) |
+|---------|---------|------------------------|
+| **Detection** | Known as bot/scraper | **Simulates mobile device** (Samsung Galaxy) |
+| **Rate Limits** | Stricter | **Relaxed** (user-level limits) |
+| **File Access** | Only via bot token | **Full user access** (groups, channels, saved messages) |
+| **Compression** | Photos/videos compressed | **Document upload = original quality** |
+| **Privacy** | Bot activity logged | **Indistinguishable from normal user** |
 
 ---
 
@@ -69,28 +84,49 @@ cd teledrive
 npm install
 ```
 
-### 2. Get Telegram Bot Token
+### 2. Get Telegram API Credentials
 
-1. Open Telegram and search for **[@BotFather](https://t.me/botfather)**
-2. Send `/newbot` and follow instructions
-3. Copy the token (looks like `123456789:ABCdef...`)
+1. Go to [https://my.telegram.org/apps](https://my.telegram.org/apps)
+2. Log in with your phone number
+3. Create a new app:
+   - **App title:** `Teledrive`
+   - **Short name:** `teledrive`
+   - **Platform:** `Desktop`
+   - **Description:** `Personal media streaming from Telegram`
+4. Copy **API_ID** (a number) and **API_HASH** (a string)
 
-### 3. Configure Environment
+### 3. Generate Session String (One-Time)
 
 ```bash
-cp server/.env.example server/.env
+cd server
+cp .env.example .env
+# Edit .env: add your API_ID and API_HASH
+
+npm run generate-session
 ```
+
+Follow the prompts:
+1. Enter your phone number (with country code, e.g. `+84...`)
+2. Enter the OTP code sent to your Telegram
+3. Enter 2FA password if you have one
+
+The script will output a **session string**. Copy it.
+
+### 4. Configure Environment
 
 Edit `server/.env`:
 ```env
 PORT=3001
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+API_ID=12345678
+API_HASH=your_api_hash_here
+TELEGRAM_SESSION=your_session_string_here
 NODE_ENV=development
 ```
 
-### 4. Run Development
+### 5. Run Development
 
 ```bash
+# From root directory
 npm run dev
 ```
 
@@ -99,46 +135,53 @@ npm run dev
 
 ---
 
-## Adding Media (Upload via Telegram Bot)
+## Adding Media (Upload via Telegram)
 
-1. **Send any file** to your Telegram bot (audio, video, image, document)
-2. The bot will reply with an **inline keyboard**:
-   - 📁 **Upload as File (Keep Quality)** — saves to your library with original quality
-   - ❌ **Cancel** — discards the file
-3. Visit your Teledrive web app to browse and stream!
+1. **Send any file** to yourself (Saved Messages) or any chat where your account is active
+   - On mobile: tap 📎 → **File** (not Photo/Video) to keep original quality
+2. Teledrive will **auto-index** the file within seconds
+3. Visit your web app to browse and stream!
 
-> **Tip:** On mobile, tap the 📎 icon and choose **"File"** instead of **"Photo/Video"** to avoid Telegram compression.
+> **Tip:** Forward media from channels/groups to your Saved Messages. Teledrive detects everything automatically.
 
 ---
 
 ## Deploy to Render (Free Hosting)
 
-### 1. Push to GitHub
+### 1. Generate Session String Locally
+
+You **must** run the session generator on your local machine first (see Step 3 above). You cannot generate a session on Render (no interactive terminal).
+
+### 2. Push to GitHub
 
 ```bash
 git push origin main
 ```
 
-### 2. Connect to Render
+### 3. Connect to Render
 
 1. Go to [render.com](https://render.com) and sign up with GitHub
 2. Click **New +** → **Blueprint**
 3. Select your `huyzpka-commits/teledrive` repository
 4. Render will auto-read `render.yaml` and create your service
 
-### 3. Add Environment Variables
+### 4. Add Environment Variables
 
 In your Render service dashboard, go to **Environment** tab:
 
 | Key | Value |
 |-----|-------|
-| `TELEGRAM_BOT_TOKEN` | `123456789:ABCdef...` (from BotFather) |
+| `API_ID` | `12345678` (from my.telegram.org) |
+| `API_HASH` | `your_api_hash` (from my.telegram.org) |
+| `TELEGRAM_SESSION` | `your_session_string` (from local generator) |
 
-### 4. Deploy
+> ⚠️ **Never commit `.env` or session string to GitHub!** Only add to Render dashboard.
+
+### 5. Deploy
 
 Click **Deploy** — your app will be live at `https://teledrive-xxx.onrender.com`
 
-### 5. Keep It Online (Free Tier)
+### 6. Keep It Online (Free Tier)
 
 Render free tier sleeps after 15 minutes of inactivity. Use [UptimeRobot](https://uptimerobot.com) to ping it every 5 minutes:
 
@@ -154,7 +197,7 @@ Render free tier sleeps after 15 minutes of inactivity. Use [UptimeRobot](https:
 | `GET` | `/api/health` | Health check |
 | `GET` | `/api/media` | List all media (query: `?type=audio/video/image&search=...&limit=50`) |
 | `GET` | `/api/media/:id` | Get media details |
-| `GET` | `/api/media/:id/stream` | Stream redirect (direct Telegram URL) |
+| `GET` | `/api/media/:id/stream` | Stream media directly via MTProto (chunked download) |
 | `DELETE` | `/api/media/:id` | Delete media from library |
 | `GET` | `/api/playlists` | List playlists |
 | `POST` | `/api/playlists` | Create playlist |
@@ -188,26 +231,31 @@ PORT=3001
 
 Edit `client/tailwind.config.js` and `client/src/index.css` to customize colors and dark mode styling.
 
-### Bot Commands
-
-You can set bot commands via [@BotFather](https://t.me/botfather):
-
-```
-start - Start using Teledrive
-help - How to upload and stream
-```
-
 ---
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Music not showing in **Music** tab | Make sure you send file as **Document** (not Quick Video/Audio). Bot detects type by extension if MIME is unclear. |
-| Bot not responding | Check `TELEGRAM_BOT_TOKEN` is correct. Delete and recreate if needed. |
-| Website sleeps on free tier | Set up [UptimeRobot](https://uptimerobot.com) ping to `/api/health` every 5 minutes. |
-| Build fails on Render | Check `package-lock.json` is committed. Run `npm install --package-lock-only` locally if needed. |
-| TypeScript errors | Ensure `strict` mode is enabled in `tsconfig.json`. Use `as` type assertions for DB rows if needed. |
+| **Music not showing in Music tab** | Send file as **Document** (not Quick Video/Audio). App detects type by extension if MIME is unclear. |
+| **MTProto not connecting** | Check `API_ID` and `API_HASH` are correct. Ensure `TELEGRAM_SESSION` is set. |
+| **Session expired / banned** | Regenerate session string with `npm run generate-session`. If banned, wait 24 hours. |
+| **Website sleeps on free tier** | Set up [UptimeRobot](https://uptimerobot.com) ping to `/api/health` every 5 minutes. |
+| **Build fails on Render** | Check `package-lock.json` is committed. Run `npm install --package-lock-only` locally if needed. |
+| **Stream is slow** | MTProto downloads chunks directly from Telegram datacenters. Speed depends on your Render instance region. |
+| **TypeScript errors** | Ensure `strict` mode is enabled in `tsconfig.json`. Use `as` type assertions for DB rows if needed. |
+
+---
+
+## Security Warning
+
+⚠️ **Your Telegram account is valuable.** Using MTProto with automated tools carries a small risk of rate-limiting or temporary suspension by Telegram if abused. Teledrive mitigates this by:
+
+- Simulating a legitimate Samsung Galaxy device
+- Using conservative download chunk sizes (512KB)
+- Only downloading files when you explicitly stream them
+
+**Never share your `API_HASH` or `TELEGRAM_SESSION` with anyone.** These are equivalent to your Telegram password.
 
 ---
 

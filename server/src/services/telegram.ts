@@ -1,40 +1,27 @@
-import TelegramBot from 'node-telegram-bot-api';
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions';
+import { NewMessage } from 'telegram/events';
+import { Api } from 'telegram/tl';
 import db from '../db';
 
-const token = process.env.TELEGRAM_BOT_TOKEN || '';
+const apiId = parseInt(process.env.API_ID || '0');
+const apiHash = process.env.API_HASH || '';
+const sessionString = process.env.TELEGRAM_SESSION || '';
 
-if (!token) {
-  console.warn('Warning: TELEGRAM_BOT_TOKEN is not set. Telegram bot features will be disabled.');
-}
-
-export const bot = token ? new TelegramBot(token, { polling: true }) : null;
-
-// Tạm lưu file đợi user xác nhận
-interface PendingFile {
-  chatId: number;
-  file: TelegramBot.Audio | TelegramBot.Video | TelegramBot.Document | TelegramBot.PhotoSize;
-  fileType: string;
-  fileName: string;
-  title: string;
-  artist: string | null;
-  mimeType?: string;
-  size?: number;
-  duration?: number;
-  messageId: number;
-}
-const pendingFiles = new Map<string, PendingFile>();
-
-function getMimeType(msg: TelegramBot.Message, fileType: string): string | undefined {
-  return msg.document?.mime_type || msg.audio?.mime_type || msg.video?.mime_type;
-}
-
-function getSize(msg: TelegramBot.Message, fileType: string): number | undefined {
-  return msg.document?.file_size || msg.audio?.file_size || msg.video?.file_size;
-}
-
-function getDuration(msg: TelegramBot.Message, fileType: string): number | undefined {
-  return msg.audio?.duration || msg.video?.duration;
-}
+// Cấu hình giả lập thiết bị di động Samsung Galaxy S21 Ultra (Android 14)
+// Để Telegram server nghĩ đây là một Telegram client di động thông thường
+export const client = (apiId && apiHash)
+  ? new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
+      connectionRetries: 5,
+      deviceModel: 'Samsung SM-G998B',      // Galaxy S21 Ultra
+      systemVersion: '14',                     // Android 14
+      appVersion: '10.14.5',                   // Telegram Android version
+      systemLangCode: 'en',
+      langCode: 'en',
+      langPack: 'android',
+      useWSS: false,
+    })
+  : null;
 
 function detectTypeFromExtension(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -47,134 +34,146 @@ function detectTypeFromExtension(fileName: string): string {
   return 'document';
 }
 
-export function startTelegramBot() {
-  if (!bot) return;
+export async function startTelegramClient() {
+  if (!client) {
+    console.warn('Warning: API_ID/API_HASH not set. Telegram MTProto features disabled.');
+    return;
+  }
 
-  bot.on('message', async (msg) => {
-    const chatId = msg.chat.id;
+  await client.connect();
+  if (!sessionString) {
+    console.log('No TELEGRAM_SESSION set. Run `npm run generate-session` locally to create one.');
+    return;
+  }
 
-    // Ưu tiên document (file upload nguyên bản) -> giữ chất lượng gốc
-    const file = msg.document || msg.audio || msg.video || (msg.photo ? msg.photo[msg.photo.length - 1] : null);
+  const me = await client.getMe();
+  console.log(`🤖 MTProto connected as ${(me as any)?.firstName || 'User'} (mobile device simulation)`);
+  console.log('Telegram client started and polling...');
 
-    if (!file) {
-      if (msg.text && msg.text.startsWith('/')) {
-        if (msg.text === '/start') {
-          bot?.sendMessage(chatId, '👋 Welcome to Teledrive!\n\nSend me any file (audio, video, document, image) and choose "📁 Upload as File" to keep original quality.\n\n💡 Tip: On mobile, tap the 📎 icon and choose "File" instead of "Photo/Video" to avoid compression.');
+  client.addEventHandler(async (event) => {
+    const message = event.message;
+    if (!message || !message.media) return;
+
+    let fileName = 'Untitled';
+    let type = 'document';
+    let size = 0;
+    let mimeType = '';
+    let duration = 0;
+
+    const media = message.media;
+
+    if (media instanceof Api.MessageMediaDocument) {
+      const doc = media.document;
+      if (doc instanceof Api.Document) {
+        mimeType = doc.mimeType;
+        size = Number(doc.size);
+
+        for (const attr of doc.attributes) {
+          if (attr instanceof Api.DocumentAttributeFilename) {
+            fileName = attr.fileName;
+          }
+          if (attr instanceof Api.DocumentAttributeAudio) {
+            type = 'audio';
+            duration = attr.duration || 0;
+            if (attr.title) fileName = attr.title;
+          }
+          if (attr instanceof Api.DocumentAttributeVideo) {
+            type = 'video';
+            duration = attr.duration || 0;
+          }
+          if (attr instanceof Api.DocumentAttributeImageSize) {
+            type = 'image';
+          }
         }
       }
-      return;
+    } else if (media instanceof Api.MessageMediaPhoto) {
+      type = 'image';
+      fileName = `photo_${message.id}.jpg`;
     }
 
-    const fileAny = file as any;
-    const fileName = fileAny.file_name || msg.caption || 'Untitled';
-
-    let type = 'document';
-    const mime = getMimeType(msg, type);
-    if (mime?.startsWith('audio/')) type = 'audio';
-    else if (mime?.startsWith('video/')) type = 'video';
-    else if (mime?.startsWith('image/')) type = 'image';
-    else {
-      // fallback: detect from file extension if mime type is generic or missing
+    // Fallback detection by file extension if still document
+    if (type === 'document' && fileName !== 'Untitled') {
       const detected = detectTypeFromExtension(fileName);
       if (detected !== 'document') type = detected;
     }
 
-    const title = msg.audio?.title || fileName;
-    const artist = msg.audio?.performer || null;
+    const chatId = message.chatId?.toString() || '';
+    const messageId = message.id;
+    const sizeMB = (size / 1024 / 1024).toFixed(2);
 
-    const pendingId = `${chatId}_${msg.message_id}`;
-    pendingFiles.set(pendingId, {
-      chatId,
-      file,
-      fileType: type,
-      fileName,
-      title,
-      artist,
-      mimeType: mime,
-      size: getSize(msg, type),
-      duration: getDuration(msg, type),
-      messageId: msg.message_id,
-    });
+    console.log(`[MTProto] Received: ${fileName}, mime: ${mimeType}, type: ${type}, chat: ${chatId}, msg: ${messageId}`);
 
-    const sizeBytes = getSize(msg, type) || 0;
-    const sizeMB = (sizeBytes / 1024 / 1024).toFixed(2);
-    console.log(`[BOT] Received file: ${fileName}, mime: ${mime}, detected type: ${type}`);
+    try {
+      const stmt = db.prepare(`
+        INSERT OR IGNORE INTO media 
+        (telegram_file_id, file_unique_id, file_name, title, artist, type, mime_type, size, duration, telegram_message_id, category, chat_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    await bot.sendMessage(chatId, `📂 *${fileName}*\n\nType: \`${type}\`\nSize: \`${sizeMB} MB\`\n\nDo you want to upload this file to Teledrive?`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '📁 Upload as File (Keep Quality)', callback_data: `upload:${pendingId}` },
-          ],
-          [
-            { text: '❌ Cancel', callback_data: `cancel:${pendingId}` },
-          ],
-        ],
-      },
-    });
-  });
+      stmt.run(
+        '',
+        '',
+        fileName,
+        fileName,
+        '',
+        type,
+        mimeType,
+        size,
+        duration,
+        messageId,
+        '',
+        chatId
+      );
 
-  bot.on('callback_query', async (query) => {
-    const chatId = query.message?.chat.id;
-    const msgId = query.message?.message_id;
-    const data = query.data;
-    if (!data || !chatId || !msgId) return;
-
-    await bot.answerCallbackQuery(query.id);
-
-    if (data.startsWith('upload:')) {
-      const pendingId = data.replace('upload:', '');
-      const pending = pendingFiles.get(pendingId);
-      if (!pending) {
-        await bot.editMessageText('❌ File expired or already processed.', { chat_id: chatId, message_id: msgId });
-        return;
-      }
-
-      try {
-        const fileAny = pending.file as any;
-        const stmt = db.prepare(`
-          INSERT OR IGNORE INTO media 
-          (telegram_file_id, file_unique_id, file_name, title, artist, type, mime_type, size, duration, telegram_message_id, category)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stmt.run(
-          fileAny.file_id,
-          fileAny.file_unique_id,
-          pending.fileName,
-          pending.title,
-          pending.artist,
-          pending.fileType,
-          pending.mimeType || null,
-          pending.size || null,
-          pending.duration || null,
-          pending.messageId,
-          null
-        );
-
-        pendingFiles.delete(pendingId);
-        await bot.editMessageText(`✅ Added to Teledrive: *${pending.title}* (${pending.fileType})`, {
-          chat_id: chatId,
-          message_id: msgId,
-          parse_mode: 'Markdown',
-        });
-      } catch (err) {
-        console.error('Error saving media:', err);
-        await bot.editMessageText('❌ Failed to add media.', { chat_id: chatId, message_id: msgId });
-      }
-    } else if (data.startsWith('cancel:')) {
-      const pendingId = data.replace('cancel:', '');
-      pendingFiles.delete(pendingId);
-      await bot.editMessageText('🚫 Upload cancelled.', { chat_id: chatId, message_id: msgId });
+      await client.sendMessage(message.chatId!, {
+        message: `✅ Added to Teledrive: *${fileName}* (${type})\nSize: ${sizeMB} MB`,
+        parseMode: 'md',
+      });
+    } catch (err) {
+      console.error('Error saving media:', err);
+      await client.sendMessage(message.chatId!, {
+        message: '❌ Failed to add media.',
+      });
     }
-  });
-
-  console.log('Telegram bot started and polling...');
+  }, new NewMessage({}));
 }
 
-export async function getFileUrl(fileId: string): Promise<string> {
-  if (!bot) throw new Error('Bot not initialized');
-  const file = await bot.getFile(fileId);
-  return `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+export async function streamMedia(res: any, chatId: string, messageId: number) {
+  if (!client) throw new Error('MTProto client not initialized');
+
+  const messages = await client.getMessages(chatId, { ids: messageId });
+  if (!messages.length || !messages[0].media) {
+    throw new Error('Media not found');
+  }
+
+  const media = messages[0].media;
+  let mimeType = 'application/octet-stream';
+  let size = 0;
+
+  if (media instanceof Api.MessageMediaDocument) {
+    const doc = media.document;
+    if (doc instanceof Api.Document) {
+      mimeType = doc.mimeType;
+      size = Number(doc.size);
+    }
+  } else if (media instanceof Api.MessageMediaPhoto) {
+    mimeType = 'image/jpeg';
+  }
+
+  res.setHeader('Content-Type', mimeType);
+  if (size > 0) res.setHeader('Content-Length', size.toString());
+
+  try {
+    for await (const chunk of client.iterDownload({ file: media, requestSize: 512 * 1024 })) {
+      res.write(chunk);
+    }
+    res.end();
+  } catch (err) {
+    console.error('Stream error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Stream failed' });
+    } else {
+      res.end();
+    }
+  }
 }
