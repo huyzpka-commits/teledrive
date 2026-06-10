@@ -21,7 +21,7 @@ export default function Library() {
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">
-        {type === 'audio' ? 'Music Library' : type === 'video' ? 'Movie Library' : 'All Media'}
+        {type === 'audio' ? 'Music Library' : type === 'video' ? 'Movie Library' : type === 'image' ? 'Image Library' : 'All Media'}
       </h2>
       <div className="mb-6">
         <SearchBar value={search} onChange={setSearch} />

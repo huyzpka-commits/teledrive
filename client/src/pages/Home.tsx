@@ -7,12 +7,14 @@ export default function Home() {
   const [recent, setRecent] = useState<Media[]>([]);
   const [audio, setAudio] = useState<Media[]>([]);
   const [video, setVideo] = useState<Media[]>([]);
+  const [images, setImages] = useState<Media[]>([]);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     api.get('/media?limit=5').then((res) => setRecent(res.data.data));
     api.get('/media?type=audio&limit=5').then((res) => setAudio(res.data.data));
     api.get('/media?type=video&limit=5').then((res) => setVideo(res.data.data));
+    api.get('/media?type=image&limit=5').then((res) => setImages(res.data.data));
   }, []);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function Home() {
         <>
           <MediaGrid title="Music" media={audio} />
           <MediaGrid title="Movies" media={video} />
+          <MediaGrid title="Images" media={images} />
         </>
       )}
     </div>

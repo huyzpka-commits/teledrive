@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Library, Music, Film, Settings } from 'lucide-react';
+import { Home, Library, Music, Film, Image, Settings } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/library?type=audio', icon: Music, label: 'Music' },
   { to: '/library?type=video', icon: Film, label: 'Movies' },
+  { to: '/library?type=image', icon: Image, label: 'Images' },
   { to: '/library', icon: Library, label: 'Library' },
 ];
 
