@@ -31,7 +31,7 @@ router.get('/', (req, res) => {
 
 router.get('/:id', (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id) as Record<string, any> | undefined;
     if (!row) return res.status(404).json({ error: 'Media not found' });
     res.json(row);
   } catch (e) {
@@ -41,7 +41,7 @@ router.get('/:id', (req, res) => {
 
 router.get('/:id/stream', async (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id) as Record<string, any> | undefined;
     if (!row) return res.status(404).json({ error: 'Media not found' });
 
     const url = await getFileUrl(row.telegram_file_id);

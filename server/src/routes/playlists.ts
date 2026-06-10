@@ -42,8 +42,8 @@ router.post('/:id/items', (req, res) => {
   try {
     const { media_id } = req.body;
     const playlist_id = req.params.id;
-    const maxPos = db.prepare('SELECT MAX(position) as maxPos FROM playlist_items WHERE playlist_id = ?').get(playlist_id);
-    const nextPos = (maxPos?.maxPos || 0) + 1;
+    const maxPosRow = db.prepare('SELECT MAX(position) as maxPos FROM playlist_items WHERE playlist_id = ?').get(playlist_id) as { maxPos: number | null } | undefined;
+    const nextPos = (maxPosRow?.maxPos ?? 0) + 1;
     const result = db.prepare('INSERT INTO playlist_items (playlist_id, media_id, position) VALUES (?, ?, ?)').run(playlist_id, media_id, nextPos);
     res.json({ id: result.lastInsertRowid });
   } catch (e) {

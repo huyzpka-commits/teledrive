@@ -27,7 +27,8 @@ export function startTelegramBot() {
     if (!isAudio && !isVideo) return;
 
     const type = isAudio ? 'audio' : 'video';
-    const fileName = file.file_name || msg.caption || 'Untitled';
+    const fileAny = file as any;
+    const fileName = fileAny.file_name || msg.caption || 'Untitled';
     const title = msg.audio?.title || fileName;
     const artist = msg.audio?.performer || null;
 
