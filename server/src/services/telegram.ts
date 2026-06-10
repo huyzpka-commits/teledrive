@@ -36,6 +36,17 @@ function getDuration(msg: TelegramBot.Message, fileType: string): number | undef
   return msg.audio?.duration || msg.video?.duration;
 }
 
+function detectTypeFromExtension(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const audioExts = ['mp3', 'flac', 'wav', 'aac', 'ogg', 'opus', 'm4a', 'wma', 'aiff'];
+  const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpeg', 'mpg', '3gp'];
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff', 'tif', 'ico', 'heic'];
+  if (audioExts.includes(ext)) return 'audio';
+  if (videoExts.includes(ext)) return 'video';
+  if (imageExts.includes(ext)) return 'image';
+  return 'document';
+}
+
 export function startTelegramBot() {
   if (!bot) return;
 
@@ -62,6 +73,11 @@ export function startTelegramBot() {
     if (mime?.startsWith('audio/')) type = 'audio';
     else if (mime?.startsWith('video/')) type = 'video';
     else if (mime?.startsWith('image/')) type = 'image';
+    else {
+      // fallback: detect from file extension if mime type is generic or missing
+      const detected = detectTypeFromExtension(fileName);
+      if (detected !== 'document') type = detected;
+    }
 
     const title = msg.audio?.title || fileName;
     const artist = msg.audio?.performer || null;
@@ -80,7 +96,11 @@ export function startTelegramBot() {
       messageId: msg.message_id,
     });
 
-    await bot.sendMessage(chatId, `📂 *${fileName}*\n\nType: \`${type}\`\nSize: \`${(getSize(msg, type) || 0 / 1024 / 1024).toFixed(2)} MB\`\n\nDo you want to upload this file to Teledrive?`, {
+    const sizeBytes = getSize(msg, type) || 0;
+    const sizeMB = (sizeBytes / 1024 / 1024).toFixed(2);
+    console.log(`[BOT] Received file: ${fileName}, mime: ${mime}, detected type: ${type}`);
+
+    await bot.sendMessage(chatId, `📂 *${fileName}*\n\nType: \`${type}\`\nSize: \`${sizeMB} MB\`\n\nDo you want to upload this file to Teledrive?`, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
