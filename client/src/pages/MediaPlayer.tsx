@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api, { Media } from '../api';
-import { ArrowLeft, Play, Download } from 'lucide-react';
+import { ArrowLeft, Play, Download, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function MediaPlayer() {
@@ -23,6 +23,10 @@ export default function MediaPlayer() {
   if (!media) return <div className="p-10 text-center">Media not found</div>;
 
   const streamUrl = `/api/media/${media.id}/stream`;
+  const isImage = media.type === 'image';
+  const isVideo = media.type === 'video';
+  const isAudio = media.type === 'audio';
+  const isDocument = media.type === 'document';
 
   return (
     <div>
@@ -38,7 +42,7 @@ export default function MediaPlayer() {
             <p className="text-gray-400">{media.artist || media.category || 'Unknown Artist'}</p>
           </div>
 
-          {media.type === 'video' ? (
+          {isVideo ? (
             <div className="aspect-video bg-black rounded-xl overflow-hidden mb-6">
               <video
                 src={streamUrl}
@@ -50,13 +54,30 @@ export default function MediaPlayer() {
                 Your browser does not support the video tag.
               </video>
             </div>
-          ) : (
+          ) : isImage ? (
+            <div className="bg-gray-800 rounded-xl overflow-hidden mb-6 flex items-center justify-center p-4">
+              <img
+                src={streamUrl}
+                alt={media.title || media.file_name}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          ) : isAudio ? (
             <div className="bg-gray-800 rounded-xl p-8 flex items-center justify-center mb-6">
               <div className="text-center">
                 <div className="w-20 h-20 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Play size={32} className="text-blue-400 ml-1" />
                 </div>
                 <p className="text-gray-400">Playing audio stream...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-800 rounded-xl p-8 flex items-center justify-center mb-6">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText size={40} className="text-gray-400" />
+                </div>
+                <p className="text-gray-400">Document preview not available</p>
               </div>
             </div>
           )}
@@ -69,10 +90,10 @@ export default function MediaPlayer() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
             >
               <Download size={16} />
-              Open Stream
+              Open / Download
             </a>
             <span className="text-sm text-gray-500">
-              {media.mime_type} • {(media.size / 1024 / 1024).toFixed(2)} MB
+              {media.mime_type || media.type} • {(media.size / 1024 / 1024).toFixed(2)} MB
             </span>
           </div>
         </div>

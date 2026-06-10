@@ -12,7 +12,7 @@ export interface Media {
   file_name: string;
   title: string;
   artist: string | null;
-  type: 'audio' | 'video';
+  type: 'audio' | 'video' | 'document' | 'image';
   mime_type: string;
   size: number;
   duration: number;

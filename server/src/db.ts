@@ -19,7 +19,7 @@ db.exec(`
     file_name TEXT,
     title TEXT,
     artist TEXT,
-    type TEXT CHECK(type IN ('audio', 'video')) NOT NULL,
+    type TEXT CHECK(type IN ('audio', 'video', 'document', 'image')) NOT NULL,
     mime_type TEXT,
     size INTEGER,
     duration INTEGER,
