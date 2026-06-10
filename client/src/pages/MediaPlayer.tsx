@@ -26,7 +26,6 @@ export default function MediaPlayer() {
   const isImage = media.type === 'image';
   const isVideo = media.type === 'video';
   const isAudio = media.type === 'audio';
-  const isDocument = media.type === 'document';
 
   return (
     <div>
